@@ -34,27 +34,27 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-public class FileSystemStore implements Store {
-
+public class ZipStore implements Store {
+    private final FileSystem zfs;
     private final Path internalRoot;
 
-    public FileSystemStore(String path, FileSystem fileSystem) {
-        if (fileSystem == null) {
-            internalRoot = Paths.get(path);
-        } else {
-            internalRoot = fileSystem.getPath(path);
+    public ZipStore(Path zipFilePath) throws IOException {
+        final HashMap<String, String> zipParams = new HashMap<>();
+        if (!Files.exists(zipFilePath)) {
+            zipParams.put("create", "true");
         }
-    }
-
-    public FileSystemStore(Path rootPath) {
-        internalRoot = rootPath;
+        final URI uri = URI.create("jar:file:" + zipFilePath.toUri().getPath());
+        zfs = FileSystems.newFileSystem(uri, zipParams);
+        internalRoot = zfs.getRootDirectories().iterator().next();
     }
 
     @Override
@@ -118,8 +118,13 @@ public class FileSystemStore implements Store {
 
     private TreeSet<String> getKeysFor(String suffix) throws IOException {
         return Files.walk(internalRoot)
-                .filter(path -> path.getFileName().toString().endsWith(suffix))
+                .filter(path1 -> path1.toString().endsWith(suffix))
                 .map(path -> internalRoot.relativize(path.getParent()).toString())
                 .collect(Collectors.toCollection(TreeSet::new));
+    }
+
+    @Override
+    public void close() throws IOException {
+        zfs.close();
     }
 }
